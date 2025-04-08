@@ -5,7 +5,9 @@ import { FormattingSettingsService } from "powerbi-visuals-utils-formattingmodel
 import "./../style/visual.less";
 import { VisualFormattingSettingsModel } from "./settings";
 import * as L from "leaflet";
+import * as d3 from "d3";
 import { legendInterfaces, legend, legendData } from "powerbi-visuals-utils-chartutils";
+import { createTooltipServiceWrapper, ITooltipServiceWrapper } from "powerbi-visuals-utils-tooltiputils";
 
 import VisualConstructorOptions = powerbi.extensibility.visual.VisualConstructorOptions;
 import VisualUpdateOptions = powerbi.extensibility.visual.VisualUpdateOptions;
@@ -47,6 +49,7 @@ export class Visual implements IVisual {
     private selectionManager: powerbi.extensibility.ISelectionManager;
     private selectedIds: powerbi.extensibility.ISelectionId[] = [];
     private eventService: IVisualEventService;
+    private tooltipServiceWrapper: ITooltipServiceWrapper;
 
     constructor(options: VisualConstructorOptions) {
         this.target = options.element;
@@ -55,6 +58,7 @@ export class Visual implements IVisual {
         this.colorPalette = options.host.colorPalette;
         this.selectionManager = options.host.createSelectionManager();
         this.eventService = options.host.eventService;
+        this.tooltipServiceWrapper = createTooltipServiceWrapper(this.host.tooltipService, this.target);
 
         const wrapper = document.createElement("div");
         wrapper.style.display = "flex";
@@ -145,6 +149,12 @@ export class Visual implements IVisual {
             const destLngColumn = this.getColumnByRole(categorical, "destLng");
             const categoryColumn = this.getColumnByRole(categorical, "category");
             const lineWidthColumn = this.getColumnByRole(categorical, "lineWidth");
+            
+            // Extract tooltip fields
+            const tooltipFields = [
+                ...(categorical.values?.filter(v => v.source.roles?.tooltips) || []),
+                ...(categorical.categories?.filter(c => c.source.roles?.tooltips) || [])
+              ];
 
             const originValues = originColumn && "values" in originColumn ? originColumn.values : [];
             const originLatValues = originLatColumn && "values" in originLatColumn ? originLatColumn.values : [];
@@ -154,7 +164,6 @@ export class Visual implements IVisual {
             const destLngValues = destLngColumn && "values" in destLngColumn ? destLngColumn.values : [];
             const categoryValues = categoryColumn && "values" in categoryColumn ? categoryColumn.values : [];
             const lineWidthValues = lineWidthColumn && "values" in lineWidthColumn ? lineWidthColumn.values : [];
-
 
             const data: RouteData[] = originLatValues.map((_, index) => ({
                 origin: originValues[index]?.toString() || '',
@@ -189,7 +198,7 @@ export class Visual implements IVisual {
             });
 
             this.updateLegend(data, options.viewport, showLegend, legendPositionKey, defaultColor);
-            this.drawRoutes(data, options.viewport);
+            this.drawRoutes(data, options.viewport, tooltipFields);
         } catch (e) {
             console.error("Rendering error:", e);
             if (this.eventService?.renderingFailed) {
@@ -321,7 +330,7 @@ export class Visual implements IVisual {
         return userColor || this.colorPalette.getColor(value).value;
     }
 
-    private drawRoutes(data: RouteData[], viewport: powerbi.IViewport): void {
+    private drawRoutes(data: RouteData[], viewport: powerbi.IViewport, tooltipFields: powerbi.DataViewValueColumn[]): void {
         if (!this.map || !data.length) return;
     
         this.routeGroup.clearLayers();
@@ -411,17 +420,47 @@ export class Visual implements IVisual {
             const polyline = L.polyline(curvedPath, {
                 color: routeColor,
                 weight: width,
-                opacity
+                opacity: opacity
             }).addTo(this.routeGroup);
-    
+
+            // Add tooltip to polyline if tooltip fields exist
+            if (tooltipFields.length > 0) {
+                const polylineElement = polyline.getElement();
+                const d3PolylineSelection = d3.select(polylineElement);
+                this.tooltipServiceWrapper.addTooltip(
+                    d3PolylineSelection,
+                    () => tooltipFields.map(field => ({
+                        displayName: field.source.displayName,
+                        value: Array.isArray(field.values) ? field.values[index]?.toString() ?? "" : ""
+                      })),
+                    () => route.selectionId ? route.selectionId.getSelector() : null
+                );
+            }
+            else {
+                 // Add default tooltips to polyline
+                const polylineElement = polyline.getElement();
+                const d3PolylineSelection = d3.select(polylineElement);
+                this.tooltipServiceWrapper.addTooltip(
+                    d3PolylineSelection,
+                    () => [{
+                        displayName: "Origin",
+                        value: route.origin
+                    }, {
+                        displayName: "Destination",
+                        value: route.destination
+                    }],
+                    () => route.selectionId ? route.selectionId.getSelector() : null
+                );
+            }
+            
             polyline.on("click", (e: any) => {
                 const multiSelect = e.originalEvent.ctrlKey || e.originalEvent.metaKey;
-                this.selectionManager.select(selectionId, multiSelect).then(ids => {
+                this.selectionManager.select(route.selectionId, multiSelect).then(ids => {
                     this.selectedIds = ids;
-                    this.drawRoutes(data, viewport);
+                    this.drawRoutes(data, viewport, tooltipFields);
                 });
-            }).addTo(this.routeGroup);
-    
+            });
+            
             bounds.extend([route.originLat, route.originLng]);
             bounds.extend([route.destLat, route.destLng]);
     
@@ -437,8 +476,34 @@ export class Visual implements IVisual {
                 fillColor: routeColor,
                 fillOpacity: opacity,
                 weight: 2
-            }).bindPopup(route.origin).addTo(this.routeGroup);
-    
+            }).addTo(this.routeGroup);
+            
+            // Add tooltip to origin circle if tooltip fields exist
+            if (tooltipFields.length > 0) {
+                const originElement = originCircle.getElement();
+                const d3OriginSelection = d3.select(originElement);
+                this.tooltipServiceWrapper.addTooltip(
+                    d3OriginSelection,
+                    () => tooltipFields.map(field => ({
+                        displayName: field.source.displayName,
+                        value: field.values[index]?.toString() ?? ""
+                    })),
+                    () => route.selectionId ? route.selectionId.getSelector() : null
+                );
+            }else{
+            // Add default tooltip to origin circle
+            const originElement = originCircle.getElement();
+            const d3OriginSelection = d3.select(originElement);
+            this.tooltipServiceWrapper.addTooltip(
+                d3OriginSelection,
+                () => [{
+                    displayName: "Origin",
+                    value: route.origin
+                }],
+                () => route.selectionId ? route.selectionId.getSelector() : null
+            );
+            }
+            
             originCircle.on("click", (e: any) => {
                 const lat = route.originLat;
                 const lng = route.originLng;
@@ -459,13 +524,13 @@ export class Visual implements IVisual {
                 if (allSelected) {
                     this.selectionManager.clear().then(() => {
                         this.selectedIds = [];
-                        this.drawRoutes(data, viewport);
+                        this.drawRoutes(data, viewport, tooltipFields);
                     });
                 } else {
                     const multiSelect = e.originalEvent.ctrlKey || e.originalEvent.metaKey;
                     this.selectionManager.select(selectionIds, multiSelect).then(ids => {
                         this.selectedIds = ids;
-                        this.drawRoutes(data, viewport);
+                        this.drawRoutes(data, viewport, tooltipFields);
                     });
                 }
             });
@@ -477,7 +542,21 @@ export class Visual implements IVisual {
                 fillColor: routeColor,
                 fillOpacity: opacity,
                 weight: 2
-            }).bindPopup(route.destination).addTo(this.routeGroup);
+            }).addTo(this.routeGroup);
+    
+            // Add tooltip to destination circle if tooltip fields exist
+            if (tooltipFields.length > 0) {
+                const destElement = destCircle.getElement();
+                const d3DestSelection = d3.select(destElement);
+                this.tooltipServiceWrapper.addTooltip(
+                    d3DestSelection,
+                    () => tooltipFields.map(field => ({
+                        displayName: field.source.displayName,
+                        value: field.values[index]?.toString() ?? ""
+                    })),
+                    () => route.selectionId ? route.selectionId.getSelector() : null
+                );
+            }
     
             destCircle.on("click", (e: any) => {
                 const lat = route.destLat;
@@ -498,13 +577,13 @@ export class Visual implements IVisual {
                 if (allSelected) {
                     this.selectionManager.clear().then(() => {
                         this.selectedIds = [];
-                        this.drawRoutes(data, viewport);
+                        this.drawRoutes(data, viewport, tooltipFields);
                     });
                 } else {
                     const multiSelect = e.originalEvent.ctrlKey || e.originalEvent.metaKey;
                     this.selectionManager.select(selectionIds, multiSelect).then(ids => {
                         this.selectedIds = ids;
-                        this.drawRoutes(data, viewport);
+                        this.drawRoutes(data, viewport, tooltipFields);
                     });
                 }
             });

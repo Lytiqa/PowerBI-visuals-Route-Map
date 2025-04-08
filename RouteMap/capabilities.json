@@ -57,6 +57,11 @@
         "kind": "Measure",
         "displayName": "Line Width",
         "requiredTypes": [{ "numeric": true }]
+      },
+      {
+        "name": "tooltips",
+        "kind": "GroupingOrMeasure",
+        "displayName": "Tooltips"
       }
     ],
     "objects": {
@@ -147,6 +152,11 @@
             "type": { "bool": true }
           }
         }
+      },
+      "tooltips": {
+        "displayName": "Tooltips",
+        "description": "Tooltips settings",
+        "properties": {}
       }
     },
     "dataViewMappings": [
@@ -177,7 +187,8 @@
           },
           "values": {
             "select": [
-              { "for": { "in": "lineWidth" } }
+              { "for": { "in": "lineWidth" } },
+              { "bind": { "to": "tooltips" } }
             ]
           }
         }
@@ -189,7 +200,14 @@
     "supportsHighlight": true,
     "supportsKeyboardFocus": true,
     "supportsLandingPage": true,
-    "supportsMultiVisualSelection": true
-
+    "supportsMultiVisualSelection": true,
+    "tooltips": {
+    "supportedTypes": {
+      "default": true,
+      "canvas": true
+    },
+    "roles": ["tooltips"],
+    "supportEnhancedTooltips": true
   }
+}
   
