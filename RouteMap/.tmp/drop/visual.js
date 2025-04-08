@@ -28999,6 +28999,7 @@ class Visual {
         this.host = options.host;
         this.colorPalette = options.host.colorPalette;
         this.selectionManager = options.host.createSelectionManager();
+        this.eventService = options.host.eventService;
         const wrapper = document.createElement("div");
         wrapper.style.display = "flex";
         wrapper.style.flex = "1";
@@ -29048,64 +29049,78 @@ class Visual {
         return undefined;
     }
     update(options) {
-        var _a;
-        if (!options || !options.dataViews || !options.dataViews[0])
-            return;
-        this.dataView = options.dataViews[0];
-        console.log(this.dataView);
-        this.formattingSettings = this.formattingSettingsService.populateFormattingSettingsModel(settings_1.VisualFormattingSettingsModel, options.dataViews);
-        const categorical = this.dataView.categorical;
-        //if (!categorical || !categorical.categories?.[0] || !categorical.values) return;
-        this.width = options.viewport.width;
-        this.height = options.viewport.height;
-        this.target.style.width = `${this.width}px`;
-        this.target.style.height = `${this.height}px`;
-        //this.mapContainer.style.width = `${this.width}px`;
-        //this.mapContainer.style.height = `${this.height}px`;
-        this.map.invalidateSize();
-        const originColumn = this.getColumnByRole(categorical, "origin");
-        const originLatColumn = this.getColumnByRole(categorical, "originLat");
-        const originLngColumn = this.getColumnByRole(categorical, "originLng");
-        const destinationColumn = this.getColumnByRole(categorical, "destination");
-        const destLatColumn = this.getColumnByRole(categorical, "destLat");
-        const destLngColumn = this.getColumnByRole(categorical, "destLng");
-        const categoryColumn = this.getColumnByRole(categorical, "category");
-        const lineWidthColumn = this.getColumnByRole(categorical, "lineWidth");
-        const originValues = originColumn && "values" in originColumn ? originColumn.values : [];
-        const originLatValues = originLatColumn && "values" in originLatColumn ? originLatColumn.values : [];
-        const originLngValues = originLngColumn && "values" in originLngColumn ? originLngColumn.values : [];
-        const destinationValues = destinationColumn && "values" in destinationColumn ? destinationColumn.values : [];
-        const destLatValues = destLatColumn && "values" in destLatColumn ? destLatColumn.values : [];
-        const destLngValues = destLngColumn && "values" in destLngColumn ? destLngColumn.values : [];
-        const categoryValues = categoryColumn && "values" in categoryColumn ? categoryColumn.values : [];
-        const lineWidthValues = lineWidthColumn && "values" in lineWidthColumn ? lineWidthColumn.values : [];
-        const data = originLatValues.map((_, index) => {
-            var _a, _b, _c;
-            return ({
-                origin: ((_a = originValues[index]) === null || _a === void 0 ? void 0 : _a.toString()) || '',
-                destination: ((_b = destinationValues[index]) === null || _b === void 0 ? void 0 : _b.toString()) || '',
-                originLat: parseFloat(originLatValues[index]),
-                originLng: parseFloat(originLngValues[index]),
-                destLat: parseFloat(destLatValues[index]),
-                destLng: parseFloat(destLngValues[index]),
-                lineWidth: lineWidthValues ? parseFloat(lineWidthValues[index]) : NaN,
-                legendValue: ((_c = categoryValues[index]) === null || _c === void 0 ? void 0 : _c.toString()) || ''
+        var _a, _b, _c, _d;
+        if ((_a = this.eventService) === null || _a === void 0 ? void 0 : _a.renderingStarted) {
+            this.eventService.renderingStarted(options);
+        }
+        try {
+            if (!options || !options.dataViews || !options.dataViews[0])
+                return;
+            this.dataView = options.dataViews[0];
+            console.log(this.dataView);
+            this.formattingSettings = this.formattingSettingsService.populateFormattingSettingsModel(settings_1.VisualFormattingSettingsModel, options.dataViews);
+            const categorical = this.dataView.categorical;
+            //if (!categorical || !categorical.categories?.[0] || !categorical.values) return;
+            this.width = options.viewport.width;
+            this.height = options.viewport.height;
+            this.target.style.width = `${this.width}px`;
+            this.target.style.height = `${this.height}px`;
+            //this.mapContainer.style.width = `${this.width}px`;
+            //this.mapContainer.style.height = `${this.height}px`;
+            this.map.invalidateSize();
+            const originColumn = this.getColumnByRole(categorical, "origin");
+            const originLatColumn = this.getColumnByRole(categorical, "originLat");
+            const originLngColumn = this.getColumnByRole(categorical, "originLng");
+            const destinationColumn = this.getColumnByRole(categorical, "destination");
+            const destLatColumn = this.getColumnByRole(categorical, "destLat");
+            const destLngColumn = this.getColumnByRole(categorical, "destLng");
+            const categoryColumn = this.getColumnByRole(categorical, "category");
+            const lineWidthColumn = this.getColumnByRole(categorical, "lineWidth");
+            const originValues = originColumn && "values" in originColumn ? originColumn.values : [];
+            const originLatValues = originLatColumn && "values" in originLatColumn ? originLatColumn.values : [];
+            const originLngValues = originLngColumn && "values" in originLngColumn ? originLngColumn.values : [];
+            const destinationValues = destinationColumn && "values" in destinationColumn ? destinationColumn.values : [];
+            const destLatValues = destLatColumn && "values" in destLatColumn ? destLatColumn.values : [];
+            const destLngValues = destLngColumn && "values" in destLngColumn ? destLngColumn.values : [];
+            const categoryValues = categoryColumn && "values" in categoryColumn ? categoryColumn.values : [];
+            const lineWidthValues = lineWidthColumn && "values" in lineWidthColumn ? lineWidthColumn.values : [];
+            const data = originLatValues.map((_, index) => {
+                var _a, _b, _c;
+                return ({
+                    origin: ((_a = originValues[index]) === null || _a === void 0 ? void 0 : _a.toString()) || '',
+                    destination: ((_b = destinationValues[index]) === null || _b === void 0 ? void 0 : _b.toString()) || '',
+                    originLat: parseFloat(originLatValues[index]),
+                    originLng: parseFloat(originLngValues[index]),
+                    destLat: parseFloat(destLatValues[index]),
+                    destLng: parseFloat(destLngValues[index]),
+                    lineWidth: lineWidthValues ? parseFloat(lineWidthValues[index]) : NaN,
+                    legendValue: ((_c = categoryValues[index]) === null || _c === void 0 ? void 0 : _c.toString()) || ''
+                });
+            }).filter(route => this.isValidRouteData(route));
+            const showLegend = this.formattingSettings.legendSettings.show.value;
+            const legendPositionValue = this.formattingSettings.legendSettings.position.value.value;
+            const legendPositionKey = powerbi_visuals_utils_chartutils_1.legendInterfaces.LegendPosition[legendPositionValue];
+            const defaultColor = this.formattingSettings.routeSettingsCard.lineColor.value.value;
+            const legendFontSize = this.formattingSettings.legendSettings.fontSize.value;
+            (_b = this.target.querySelector('.legend-container')) === null || _b === void 0 ? void 0 : _b.setAttribute('style', `--legend-font-size: ${legendFontSize}px;`);
+            const selectionIds = categoryValues.map((value, index) => this.host.createSelectionIdBuilder()
+                .withCategory(categoryColumn, index)
+                .createSelectionId());
+            data.forEach((route, i) => {
+                route.selectionId = selectionIds[i];
             });
-        }).filter(route => this.isValidRouteData(route));
-        const showLegend = this.formattingSettings.legendSettings.show.value;
-        const legendPositionValue = this.formattingSettings.legendSettings.position.value.value;
-        const legendPositionKey = powerbi_visuals_utils_chartutils_1.legendInterfaces.LegendPosition[legendPositionValue];
-        const defaultColor = this.formattingSettings.routeSettingsCard.lineColor.value.value;
-        const legendFontSize = this.formattingSettings.legendSettings.fontSize.value;
-        (_a = this.target.querySelector('.legend-container')) === null || _a === void 0 ? void 0 : _a.setAttribute('style', `--legend-font-size: ${legendFontSize}px;`);
-        const selectionIds = categoryValues.map((value, index) => this.host.createSelectionIdBuilder()
-            .withCategory(categoryColumn, index)
-            .createSelectionId());
-        data.forEach((route, i) => {
-            route.selectionId = selectionIds[i];
-        });
-        this.updateLegend(data, options.viewport, showLegend, legendPositionKey, defaultColor);
-        this.drawRoutes(data, options.viewport);
+            this.updateLegend(data, options.viewport, showLegend, legendPositionKey, defaultColor);
+            this.drawRoutes(data, options.viewport);
+        }
+        catch (e) {
+            console.error("Rendering error:", e);
+            if ((_c = this.eventService) === null || _c === void 0 ? void 0 : _c.renderingFailed) {
+                this.eventService.renderingFailed(options, e);
+            }
+        }
+        if ((_d = this.eventService) === null || _d === void 0 ? void 0 : _d.renderingFinished) {
+            this.eventService.renderingFinished(options);
+        }
     }
     updateLegend(data, viewport, show, position, defaultColor) {
         var _a, _b, _c, _d;

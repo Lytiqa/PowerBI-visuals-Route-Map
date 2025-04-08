@@ -16,6 +16,7 @@ import IColorPalette = powerbi.extensibility.IColorPalette;
 import VisualObjectInstance = powerbi.VisualObjectInstance;
 import IVisualHost = powerbi.extensibility.visual.IVisualHost;
 import EnumerateVisualObjectInstancesOptions = powerbi.EnumerateVisualObjectInstancesOptions;
+import IVisualEventService = powerbi.extensibility.IVisualEventService;
 
 interface RouteData {
     origin: string;
@@ -45,8 +46,7 @@ export class Visual implements IVisual {
     private colorPalette: IColorPalette;
     private selectionManager: powerbi.extensibility.ISelectionManager;
     private selectedIds: powerbi.extensibility.ISelectionId[] = [];
-
-
+    private eventService: IVisualEventService;
 
     constructor(options: VisualConstructorOptions) {
         this.target = options.element;
@@ -54,6 +54,7 @@ export class Visual implements IVisual {
         this.host = options.host;
         this.colorPalette = options.host.colorPalette;
         this.selectionManager = options.host.createSelectionManager();
+        this.eventService = options.host.eventService;
 
         const wrapper = document.createElement("div");
         wrapper.style.display = "flex";
@@ -117,73 +118,88 @@ export class Visual implements IVisual {
 }
 
     public update(options: VisualUpdateOptions) {
-        if (!options || !options.dataViews || !options.dataViews[0]) return;
-        this.dataView = options.dataViews[0];
-        console.log(this.dataView);
-        this.formattingSettings = this.formattingSettingsService.populateFormattingSettingsModel(VisualFormattingSettingsModel, options.dataViews);
-        const categorical = this.dataView.categorical;
-        //if (!categorical || !categorical.categories?.[0] || !categorical.values) return;
-        this.width = options.viewport.width;
-        this.height = options.viewport.height;
-        this.target.style.width = `${this.width}px`;
-        this.target.style.height = `${this.height}px`;
-        //this.mapContainer.style.width = `${this.width}px`;
-        //this.mapContainer.style.height = `${this.height}px`;
-        this.map.invalidateSize();
+        if (this.eventService?.renderingStarted) {
+            this.eventService.renderingStarted(options);
+        }
 
-        const originColumn = this.getColumnByRole(categorical, "origin");
-        const originLatColumn = this.getColumnByRole(categorical, "originLat");
-        const originLngColumn = this.getColumnByRole(categorical, "originLng");
-        const destinationColumn = this.getColumnByRole(categorical, "destination");
-        const destLatColumn = this.getColumnByRole(categorical, "destLat");
-        const destLngColumn = this.getColumnByRole(categorical, "destLng");
-        const categoryColumn = this.getColumnByRole(categorical, "category");
-        const lineWidthColumn = this.getColumnByRole(categorical, "lineWidth");
+        try {
+            if (!options || !options.dataViews || !options.dataViews[0]) return;
+            this.dataView = options.dataViews[0];
+            console.log(this.dataView);
+            this.formattingSettings = this.formattingSettingsService.populateFormattingSettingsModel(VisualFormattingSettingsModel, options.dataViews);
+            const categorical = this.dataView.categorical;
+            //if (!categorical || !categorical.categories?.[0] || !categorical.values) return;
+            this.width = options.viewport.width;
+            this.height = options.viewport.height;
+            this.target.style.width = `${this.width}px`;
+            this.target.style.height = `${this.height}px`;
+            //this.mapContainer.style.width = `${this.width}px`;
+            //this.mapContainer.style.height = `${this.height}px`;
+            this.map.invalidateSize();
 
-        const originValues = originColumn && "values" in originColumn ? originColumn.values : [];
-        const originLatValues = originLatColumn && "values" in originLatColumn ? originLatColumn.values : [];
-        const originLngValues = originLngColumn && "values" in originLngColumn ? originLngColumn.values : [];
-        const destinationValues = destinationColumn && "values" in destinationColumn ? destinationColumn.values : [];
-        const destLatValues = destLatColumn && "values" in destLatColumn ? destLatColumn.values : [];
-        const destLngValues = destLngColumn && "values" in destLngColumn ? destLngColumn.values : [];
-        const categoryValues = categoryColumn && "values" in categoryColumn ? categoryColumn.values : [];
-        const lineWidthValues = lineWidthColumn && "values" in lineWidthColumn ? lineWidthColumn.values : [];
+            const originColumn = this.getColumnByRole(categorical, "origin");
+            const originLatColumn = this.getColumnByRole(categorical, "originLat");
+            const originLngColumn = this.getColumnByRole(categorical, "originLng");
+            const destinationColumn = this.getColumnByRole(categorical, "destination");
+            const destLatColumn = this.getColumnByRole(categorical, "destLat");
+            const destLngColumn = this.getColumnByRole(categorical, "destLng");
+            const categoryColumn = this.getColumnByRole(categorical, "category");
+            const lineWidthColumn = this.getColumnByRole(categorical, "lineWidth");
+
+            const originValues = originColumn && "values" in originColumn ? originColumn.values : [];
+            const originLatValues = originLatColumn && "values" in originLatColumn ? originLatColumn.values : [];
+            const originLngValues = originLngColumn && "values" in originLngColumn ? originLngColumn.values : [];
+            const destinationValues = destinationColumn && "values" in destinationColumn ? destinationColumn.values : [];
+            const destLatValues = destLatColumn && "values" in destLatColumn ? destLatColumn.values : [];
+            const destLngValues = destLngColumn && "values" in destLngColumn ? destLngColumn.values : [];
+            const categoryValues = categoryColumn && "values" in categoryColumn ? categoryColumn.values : [];
+            const lineWidthValues = lineWidthColumn && "values" in lineWidthColumn ? lineWidthColumn.values : [];
 
 
-        const data: RouteData[] = originLatValues.map((_, index) => ({
-            origin: originValues[index]?.toString() || '',
-            destination: destinationValues[index]?.toString() || '',
-            originLat: parseFloat(originLatValues[index] as any),
-            originLng: parseFloat(originLngValues[index] as any),
-            destLat: parseFloat(destLatValues[index] as any),
-            destLng: parseFloat(destLngValues[index] as any),
-            lineWidth: lineWidthValues ? parseFloat(lineWidthValues[index] as any) : NaN,
-            legendValue: categoryValues[index]?.toString() || ''
-        })).filter(route => this.isValidRouteData(route));
- 
-        const showLegend = this.formattingSettings.legendSettings.show.value;
-        const legendPositionValue = this.formattingSettings.legendSettings.position.value.value;
-        const legendPositionKey = legendInterfaces.LegendPosition[legendPositionValue];
-        const defaultColor = this.formattingSettings.routeSettingsCard.lineColor.value.value;
-        const legendFontSize = this.formattingSettings.legendSettings.fontSize.value;
-        
-        this.target.querySelector('.legend-container')?.setAttribute(
-            'style',
-            `--legend-font-size: ${legendFontSize}px;`
-        );
+            const data: RouteData[] = originLatValues.map((_, index) => ({
+                origin: originValues[index]?.toString() || '',
+                destination: destinationValues[index]?.toString() || '',
+                originLat: parseFloat(originLatValues[index] as any),
+                originLng: parseFloat(originLngValues[index] as any),
+                destLat: parseFloat(destLatValues[index] as any),
+                destLng: parseFloat(destLngValues[index] as any),
+                lineWidth: lineWidthValues ? parseFloat(lineWidthValues[index] as any) : NaN,
+                legendValue: categoryValues[index]?.toString() || ''
+            })).filter(route => this.isValidRouteData(route));
+     
+            const showLegend = this.formattingSettings.legendSettings.show.value;
+            const legendPositionValue = this.formattingSettings.legendSettings.position.value.value;
+            const legendPositionKey = legendInterfaces.LegendPosition[legendPositionValue];
+            const defaultColor = this.formattingSettings.routeSettingsCard.lineColor.value.value;
+            const legendFontSize = this.formattingSettings.legendSettings.fontSize.value;
+            
+            this.target.querySelector('.legend-container')?.setAttribute(
+                'style',
+                `--legend-font-size: ${legendFontSize}px;`
+            );
 
-        const selectionIds = categoryValues.map((value, index) =>
-            this.host.createSelectionIdBuilder()
-                .withCategory(categoryColumn as powerbi.DataViewCategoryColumn, index)
-                .createSelectionId()
-        );
-        
-        data.forEach((route, i) => {
-            route.selectionId = selectionIds[i];
-        });
+            const selectionIds = categoryValues.map((value, index) =>
+                this.host.createSelectionIdBuilder()
+                    .withCategory(categoryColumn as powerbi.DataViewCategoryColumn, index)
+                    .createSelectionId()
+            );
+            
+            data.forEach((route, i) => {
+                route.selectionId = selectionIds[i];
+            });
 
-        this.updateLegend(data, options.viewport, showLegend, legendPositionKey, defaultColor);
-        this.drawRoutes(data, options.viewport);
+            this.updateLegend(data, options.viewport, showLegend, legendPositionKey, defaultColor);
+            this.drawRoutes(data, options.viewport);
+        } catch (e) {
+            console.error("Rendering error:", e);
+            if (this.eventService?.renderingFailed) {
+                this.eventService.renderingFailed(options, e);
+            }
+        }
+
+        if (this.eventService?.renderingFinished) {
+            this.eventService.renderingFinished(options);
+        }
     }
 
     private updateLegend(
