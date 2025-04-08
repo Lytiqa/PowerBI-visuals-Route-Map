@@ -50,6 +50,11 @@ export class Visual implements IVisual {
     private selectedIds: powerbi.extensibility.ISelectionId[] = [];
     private eventService: IVisualEventService;
     private tooltipServiceWrapper: ITooltipServiceWrapper;
+    private isHighContrast: boolean = false;
+    private foregroundColor: string = "#000";
+    private backgroundColor: string = "#fff";
+    private foregroundSelectedColor: string = "#000";
+    private hyperlinkColor: string = "#000";
 
     constructor(options: VisualConstructorOptions) {
         this.target = options.element;
@@ -59,6 +64,15 @@ export class Visual implements IVisual {
         this.selectionManager = options.host.createSelectionManager();
         this.eventService = options.host.eventService;
         this.tooltipServiceWrapper = createTooltipServiceWrapper(this.host.tooltipService, this.target);
+
+        // Detect high contrast mode and store theme colors
+        this.isHighContrast = this.host.colorPalette.isHighContrast;
+        if (this.isHighContrast) {
+            this.foregroundColor = this.host.colorPalette.foreground.value;
+            this.backgroundColor = this.host.colorPalette.background.value;
+            this.foregroundSelectedColor = this.host.colorPalette.foregroundSelected.value;
+            this.hyperlinkColor = this.host.colorPalette.hyperlink.value;
+        }
 
         const wrapper = document.createElement("div");
         wrapper.style.display = "flex";
@@ -234,7 +248,18 @@ export class Visual implements IVisual {
         const legendData: legendInterfaces.LegendData = {
             title: legendTitle || "Legend",
             dataPoints: uniqueValues.map((value, index) => {
-                const color = this.getColorForValue(value) ?? defaultColor;
+                // Use high contrast colors for legend if in high contrast mode
+                let color = this.isHighContrast ? this.foregroundColor : this.getColorForValue(value) ?? defaultColor;
+                
+                // If this legend item is selected, use the selected color in high contrast mode
+                if (this.isHighContrast && this.selectedIds.some(id => 
+                    (id as any).getKey?.() === (this.host.createSelectionIdBuilder()
+                        .withCategory(this.dataView.categorical.categories[0], index)
+                        .createSelectionId() as any).getKey?.()
+                )) {
+                    color = this.foregroundSelectedColor;
+                }
+                
                 const selectionId: ISelectionId = this.host.createSelectionIdBuilder()
                     .withCategory(this.dataView.categorical.categories[0], index)
                     .createSelectionId();
@@ -319,6 +344,11 @@ export class Visual implements IVisual {
     
 
     private getColorForValue(value: string): string {
+        // In high contrast mode, always return the foreground color
+        if (this.isHighContrast) {
+            return this.foregroundColor;
+        }
+        
         const categories = this.dataView?.categorical?.categories?.[0];
         if (!categories) return this.colorPalette.getColor(value).value;
 
@@ -415,10 +445,19 @@ export class Visual implements IVisual {
 
             const opacity = (hasHighlights && !isHighlighted) || (!hasHighlights && !isSelected) ? 0.3 : 1;
 
-
+            // Determine colors based on high contrast mode
+            const lineColor = this.isHighContrast 
+                ? (isSelected ? this.foregroundSelectedColor : this.foregroundColor) 
+                : routeColor;
+            
+            const fillColor = this.isHighContrast 
+                ? (isSelected ? this.foregroundSelectedColor : this.backgroundColor) 
+                : routeColor;
+            
+            const fillOpacity = this.isHighContrast ? 1 : opacity;
     
             const polyline = L.polyline(curvedPath, {
-                color: routeColor,
+                color: lineColor,
                 weight: width,
                 opacity: opacity
             }).addTo(this.routeGroup);
@@ -472,9 +511,9 @@ export class Visual implements IVisual {
     
             const originCircle = L.circleMarker([route.originLat, route.originLng], {
                 radius: originRadius,
-                color: routeColor,
-                fillColor: routeColor,
-                fillOpacity: opacity,
+                color: lineColor,
+                fillColor: fillColor,
+                fillOpacity: fillOpacity,
                 weight: 2
             }).addTo(this.routeGroup);
             
@@ -538,9 +577,9 @@ export class Visual implements IVisual {
     
             const destCircle = L.circleMarker([route.destLat, route.destLng], {
                 radius: destRadius,
-                color: routeColor,
-                fillColor: routeColor,
-                fillOpacity: opacity,
+                color: lineColor,
+                fillColor: fillColor,
+                fillOpacity: fillOpacity,
                 weight: 2
             }).addTo(this.routeGroup);
     
