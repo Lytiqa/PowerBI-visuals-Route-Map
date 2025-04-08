@@ -212,7 +212,8 @@ export class Visual implements IVisual {
             });
 
             this.updateLegend(data, options.viewport, showLegend, legendPositionKey, defaultColor);
-            this.drawRoutes(data, options.viewport, tooltipFields);
+            this.drawRoutes(data, options.viewport, tooltipFields, categorical);
+
         } catch (e) {
             console.error("Rendering error:", e);
             if (this.eventService?.renderingFailed) {
@@ -360,7 +361,12 @@ export class Visual implements IVisual {
         return userColor || this.colorPalette.getColor(value).value;
     }
 
-    private drawRoutes(data: RouteData[], viewport: powerbi.IViewport, tooltipFields: powerbi.DataViewValueColumn[]): void {
+    private drawRoutes(
+        data: RouteData[],
+        viewport: powerbi.IViewport,
+        tooltipFields: (powerbi.DataViewValueColumn | powerbi.DataViewCategoryColumn)[],
+        categorical: powerbi.DataViewCategorical
+      ): void {
         if (!this.map || !data.length) return;
     
         this.routeGroup.clearLayers();
@@ -377,7 +383,6 @@ export class Visual implements IVisual {
     
         const bounds = L.latLngBounds([]);
     
-        const categorical = this.dataView?.categorical;
         const valueColumns = categorical?.values || [];
 
         // Find the first column with valid highlights
@@ -496,7 +501,7 @@ export class Visual implements IVisual {
                 const multiSelect = e.originalEvent.ctrlKey || e.originalEvent.metaKey;
                 this.selectionManager.select(route.selectionId, multiSelect).then(ids => {
                     this.selectedIds = ids;
-                    this.drawRoutes(data, viewport, tooltipFields);
+                    this.drawRoutes(data, viewport, tooltipFields, categorical);
                 });
             });
             
@@ -525,7 +530,7 @@ export class Visual implements IVisual {
                     d3OriginSelection,
                     () => tooltipFields.map(field => ({
                         displayName: field.source.displayName,
-                        value: field.values[index]?.toString() ?? ""
+                        value: "values" in field ? field.values[index]?.toString() ?? "" : ""
                     })),
                     () => route.selectionId ? route.selectionId.getSelector() : null
                 );
@@ -563,13 +568,13 @@ export class Visual implements IVisual {
                 if (allSelected) {
                     this.selectionManager.clear().then(() => {
                         this.selectedIds = [];
-                        this.drawRoutes(data, viewport, tooltipFields);
+                        this.drawRoutes(data, viewport, tooltipFields, categorical);
                     });
                 } else {
                     const multiSelect = e.originalEvent.ctrlKey || e.originalEvent.metaKey;
                     this.selectionManager.select(selectionIds, multiSelect).then(ids => {
                         this.selectedIds = ids;
-                        this.drawRoutes(data, viewport, tooltipFields);
+                        this.drawRoutes(data, viewport, tooltipFields, categorical);
                     });
                 }
             });
@@ -616,13 +621,13 @@ export class Visual implements IVisual {
                 if (allSelected) {
                     this.selectionManager.clear().then(() => {
                         this.selectedIds = [];
-                        this.drawRoutes(data, viewport, tooltipFields);
+                        this.drawRoutes(data, viewport, tooltipFields, categorical);
                     });
                 } else {
                     const multiSelect = e.originalEvent.ctrlKey || e.originalEvent.metaKey;
                     this.selectionManager.select(selectionIds, multiSelect).then(ids => {
                         this.selectedIds = ids;
-                        this.drawRoutes(data, viewport, tooltipFields);
+                        this.drawRoutes(data, viewport, tooltipFields, categorical);
                     });
                 }
             });

@@ -182,7 +182,8 @@
               { "for": { "in": "originLng" } },
               { "for": { "in": "destination" } },
               { "for": { "in": "destLat" } },
-              { "for": { "in": "destLng" } }
+              { "for": { "in": "destLng" } },
+              { "for": { "in": "tooltips" } }
             ]
           },
           "values": {

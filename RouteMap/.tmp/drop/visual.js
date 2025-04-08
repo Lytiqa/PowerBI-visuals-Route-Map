@@ -15517,7 +15517,7 @@ class Visual {
                 route.selectionId = selectionIds[i];
             });
             this.updateLegend(data, options.viewport, showLegend, legendPositionKey, defaultColor);
-            this.drawRoutes(data, options.viewport, tooltipFields);
+            this.drawRoutes(data, options.viewport, tooltipFields, categorical);
         }
         catch (e) {
             console.error("Rendering error:", e);
@@ -15641,8 +15641,7 @@ class Visual {
         const userColor = (_f = colorObj === null || colorObj === void 0 ? void 0 : colorObj.solid) === null || _f === void 0 ? void 0 : _f.color;
         return userColor || this.colorPalette.getColor(value).value;
     }
-    drawRoutes(data, viewport, tooltipFields) {
-        var _a;
+    drawRoutes(data, viewport, tooltipFields, categorical) {
         if (!this.map || !data.length)
             return;
         this.routeGroup.clearLayers();
@@ -15655,7 +15654,6 @@ class Visual {
         const minValue = hasValidWidths ? Math.min(...validWidths) : 0;
         const maxValue = hasValidWidths ? Math.max(...validWidths) : 1;
         const bounds = L.latLngBounds([]);
-        const categorical = (_a = this.dataView) === null || _a === void 0 ? void 0 : _a.categorical;
         const valueColumns = (categorical === null || categorical === void 0 ? void 0 : categorical.values) || [];
         // Find the first column with valid highlights
         const highlightedColumn = valueColumns.find(col => col.highlights && col.highlights.some(h => h !== null));
@@ -15739,7 +15737,7 @@ class Visual {
                 const multiSelect = e.originalEvent.ctrlKey || e.originalEvent.metaKey;
                 this.selectionManager.select(route.selectionId, multiSelect).then(ids => {
                     this.selectedIds = ids;
-                    this.drawRoutes(data, viewport, tooltipFields);
+                    this.drawRoutes(data, viewport, tooltipFields, categorical);
                 });
             });
             bounds.extend([route.originLat, route.originLng]);
@@ -15763,7 +15761,7 @@ class Visual {
                     var _a, _b;
                     return ({
                         displayName: field.source.displayName,
-                        value: (_b = (_a = field.values[index]) === null || _a === void 0 ? void 0 : _a.toString()) !== null && _b !== void 0 ? _b : ""
+                        value: "values" in field ? (_b = (_a = field.values[index]) === null || _a === void 0 ? void 0 : _a.toString()) !== null && _b !== void 0 ? _b : "" : ""
                     });
                 }), () => route.selectionId ? route.selectionId.getSelector() : null);
             }
@@ -15786,14 +15784,14 @@ class Visual {
                 if (allSelected) {
                     this.selectionManager.clear().then(() => {
                         this.selectedIds = [];
-                        this.drawRoutes(data, viewport, tooltipFields);
+                        this.drawRoutes(data, viewport, tooltipFields, categorical);
                     });
                 }
                 else {
                     const multiSelect = e.originalEvent.ctrlKey || e.originalEvent.metaKey;
                     this.selectionManager.select(selectionIds, multiSelect).then(ids => {
                         this.selectedIds = ids;
-                        this.drawRoutes(data, viewport, tooltipFields);
+                        this.drawRoutes(data, viewport, tooltipFields, categorical);
                     });
                 }
             });
@@ -15826,14 +15824,14 @@ class Visual {
                 if (allSelected) {
                     this.selectionManager.clear().then(() => {
                         this.selectedIds = [];
-                        this.drawRoutes(data, viewport, tooltipFields);
+                        this.drawRoutes(data, viewport, tooltipFields, categorical);
                     });
                 }
                 else {
                     const multiSelect = e.originalEvent.ctrlKey || e.originalEvent.metaKey;
                     this.selectionManager.select(selectionIds, multiSelect).then(ids => {
                         this.selectedIds = ids;
-                        this.drawRoutes(data, viewport, tooltipFields);
+                        this.drawRoutes(data, viewport, tooltipFields, categorical);
                     });
                 }
             });
