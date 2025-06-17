@@ -16,7 +16,6 @@
 - 🧠 Dynamic scaling of route width and bubble size
 - 🌍 Uses OpenStreetMap (free) or Azure Maps (enterprise)
 - 🧭 High-contrast and accessibility support
-- 🌐 Fully localized formatting pane (en-US, sv-SE)
 - 🧰 Supports native Power BI tooltips
 
 ---
