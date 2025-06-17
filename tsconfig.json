@@ -1,0 +1,25 @@
+{
+    "compilerOptions": {
+        "allowJs": true,
+        "emitDecoratorMetadata": true,
+        "experimentalDecorators": true,
+        "target": "es6",
+        "sourceMap": true,
+        "outDir": "./.tmp/build/",
+        "moduleResolution": "node",
+        "module": "commonjs",
+        "declaration": true,
+        "lib": [
+            "es2015",
+            "dom"
+        ],
+        "types": [
+            "powerbi-visuals-api",
+            "node",
+            "leaflet"
+        ]
+    },
+    "files": [
+        "src/visual.ts"
+    ]
+}
