@@ -55,6 +55,7 @@ export class Visual implements IVisual {
     private backgroundColor: string = "#fff";
     private foregroundSelectedColor: string = "#000";
     private hyperlinkColor: string = "#000";
+    private contextMenuShown: boolean = false;
 
     constructor(options: VisualConstructorOptions) {
         this.target = options.element;
@@ -90,6 +91,7 @@ export class Visual implements IVisual {
 
         this.legend = legend.createLegend(legendContainer, true);
         this.initializeMap();
+        this.handleContextMenu();
     }
 
     private initializeMap(): void {
@@ -104,6 +106,22 @@ export class Visual implements IVisual {
         }).addTo(this.map);
 
         this.routeGroup = L.layerGroup().addTo(this.map);
+    }
+
+    private handleContextMenu(): void {
+        this.map.on('contextmenu', (event: L.LeafletMouseEvent) => {
+            if (!this.contextMenuShown && (!event.originalEvent.target || 
+                !(event.originalEvent.target as Element).closest('.leaflet-interactive'))) {
+                this.contextMenuShown = true;
+                this.selectionManager.showContextMenu({}, {
+                    x: event.originalEvent.clientX,
+                    y: event.originalEvent.clientY
+                }).finally(() => {
+                    this.contextMenuShown = false;
+                });
+            }
+            event.originalEvent.preventDefault();
+        });
     }
 
     private isValidLatitude(lat: number): boolean {
@@ -337,6 +355,30 @@ export class Visual implements IVisual {
         this.legend.drawLegend(legendData, viewport);
         this.legend.drawLegend(legendData, viewport);
         this.map.invalidateSize();
+
+        this.setupLegendContextMenu();
+    }
+
+    private setupLegendContextMenu(): void {
+        const legendContainer = this.target.querySelector('.legend-container') as HTMLElement;
+        if (legendContainer) {
+            legendContainer.removeEventListener('contextmenu', this.handleLegendContextMenu);
+            legendContainer.addEventListener('contextmenu', this.handleLegendContextMenu);
+        }
+    }
+
+    private handleLegendContextMenu = (event: MouseEvent): void => {
+        if (!this.contextMenuShown && (!event.target || 
+            !(event.target as Element).closest('.legendItem'))) {
+            this.contextMenuShown = true;
+            this.selectionManager.showContextMenu({}, {
+                x: event.clientX,
+                y: event.clientY
+            }).finally(() => {
+                this.contextMenuShown = false;
+            });
+        }
+        event.preventDefault();
     }
     
 
@@ -495,6 +537,20 @@ export class Visual implements IVisual {
                     this.drawRoutes(data, viewport, tooltipFields, categorical);
                 });
             });
+
+            polyline.on("contextmenu", (e: any) => {
+                if (!this.contextMenuShown) {
+                    this.contextMenuShown = true;
+                    this.selectionManager.showContextMenu(route.selectionId, {
+                        x: e.originalEvent.clientX,
+                        y: e.originalEvent.clientY
+                    }).finally(() => {
+                        this.contextMenuShown = false;
+                    });
+                }
+                e.originalEvent.preventDefault();
+                e.originalEvent.stopPropagation();
+            });
             
             bounds.extend([route.originLat, route.originLng]);
             bounds.extend([route.destLat, route.destLng]);
@@ -567,6 +623,32 @@ export class Visual implements IVisual {
                     });
                 }
             });
+
+            originCircle.on("contextmenu", (e: any) => {
+                if (!this.contextMenuShown) {
+                    const lat = route.originLat;
+                    const lng = route.originLng;
+                
+                    const matchingRoutes = data.filter(r =>
+                        r.originLat === lat && r.originLng === lng ||
+                        r.destLat === lat && r.destLng === lng
+                    );
+                
+                    const selectionIds = matchingRoutes.map(r => r.selectionId).filter(id => !!id);
+                    
+                    const contextMenuSelectionId = selectionIds.length > 0 ? selectionIds[0] : route.selectionId;
+                    
+                    this.contextMenuShown = true;
+                    this.selectionManager.showContextMenu(contextMenuSelectionId, {
+                        x: e.originalEvent.clientX,
+                        y: e.originalEvent.clientY
+                    }).finally(() => {
+                        this.contextMenuShown = false;
+                    });
+                }
+                e.originalEvent.preventDefault();
+                e.originalEvent.stopPropagation();
+            });
             
     
             const destCircle = L.circleMarker([route.destLat, route.destLng], {
@@ -629,6 +711,31 @@ export class Visual implements IVisual {
                         this.drawRoutes(data, viewport, tooltipFields, categorical);
                     });
                 }
+            });
+
+            destCircle.on("contextmenu", (e: any) => {
+                if (!this.contextMenuShown) {
+                    const lat = route.destLat;
+                    const lng = route.destLng;
+                    const matchingRoutes = data.filter(r =>
+                        r.originLat === lat && r.originLng === lng ||
+                        r.destLat === lat && r.destLng === lng
+                    );
+                
+                    const selectionIds = matchingRoutes.map(r => r.selectionId).filter(id => !!id);
+                    
+                    const contextMenuSelectionId = selectionIds.length > 0 ? selectionIds[0] : route.selectionId;
+                    
+                    this.contextMenuShown = true;
+                    this.selectionManager.showContextMenu(contextMenuSelectionId, {
+                        x: e.originalEvent.clientX,
+                        y: e.originalEvent.clientY
+                    }).finally(() => {
+                        this.contextMenuShown = false;
+                    });
+                }
+                e.originalEvent.preventDefault();
+                e.originalEvent.stopPropagation();
             });
         });
     
