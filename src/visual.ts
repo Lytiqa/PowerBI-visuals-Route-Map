@@ -465,10 +465,13 @@ export class Visual implements IVisual {
                 ? minWidth + Math.pow(norm, 0.5) * (maxWidth - minWidth)
                 : lineWidthSetting;
             const routeColor = this.getColorForValue(route.legendValue);
-            const curvedPath = this.getCurvedPathCoordinates(
-                [route.originLat, route.originLng],
-                [route.destLat, route.destLng]
-            );
+            const useStraightLines = this.formattingSettings.routeSettingsCard.useStraightLines.value;
+            const pathCoordinates: [number, number][] = useStraightLines 
+                ? [[route.originLat, route.originLng], [route.destLat, route.destLng]]
+                : this.getCurvedPathCoordinates(
+                    [route.originLat, route.originLng],
+                    [route.destLat, route.destLng]
+                );
     
             const selectionId = (this.host.createSelectionIdBuilder()
                 .withCategory(this.dataView.categorical.categories[0], index)
@@ -496,7 +499,7 @@ export class Visual implements IVisual {
             
             const fillOpacity = this.isHighContrast ? 1 : opacity;
     
-            const polyline = L.polyline(curvedPath, {
+            const polyline = L.polyline(pathCoordinates, {
                 color: lineColor,
                 weight: width,
                 opacity: opacity
@@ -797,7 +800,8 @@ export class Visual implements IVisual {
                 properties: {
                     lineWidth: this.formattingSettings.routeSettingsCard.lineWidth.value,
                     lineColor: this.formattingSettings.routeSettingsCard.lineColor.value,
-                    bubbleSize: this.formattingSettings.routeSettingsCard.bubbleSize.value
+                    bubbleSize: this.formattingSettings.routeSettingsCard.bubbleSize.value,
+                    useStraightLines: this.formattingSettings.routeSettingsCard.useStraightLines.value
                 },
                 selector: null
             });

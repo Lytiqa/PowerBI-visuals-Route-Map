@@ -111,11 +111,18 @@ export class RouteSettingsCard extends formattingSettings.Card {
         value: 3
     });
 
+    useStraightLines = new formattingSettings.ToggleSwitch({
+        name: "useStraightLines",
+        displayName: "Use Straight Lines",
+        value: false
+    });
+
     constructor() {
         super();
         this.slices.push(this.lineWidth);
         this.slices.push(this.lineColor);
         this.slices.push(this.bubbleSize);
+        this.slices.push(this.useStraightLines);
     }
 }
 
