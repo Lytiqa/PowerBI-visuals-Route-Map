@@ -9,7 +9,7 @@ export class DataPointCardSettings extends formattingSettings.Card {
     defaultColor = new formattingSettings.ColorPicker({
         name: "defaultColor",
         displayName: "Default color",
-        value: { value: "" }
+        value: { value: "#007ACC" }
     });
 
     showAllDataPoints = new formattingSettings.ToggleSwitch({
@@ -130,11 +130,13 @@ export class RouteSettingsCard extends formattingSettings.Card {
  * Visual settings model class
  */
 export class VisualFormattingSettingsModel extends formattingSettings.Model {
+    dataPointCardSettings = new DataPointCardSettings();
     legendSettings = new LegendSettings();
     routeSettingsCard = new RouteSettingsCard();
 
     cards: formattingSettings.Card[] = [
         this.routeSettingsCard,
-        this.legendSettings
+        this.legendSettings,
+        this.dataPointCardSettings
     ];
 }

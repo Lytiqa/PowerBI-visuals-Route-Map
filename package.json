@@ -1,6 +1,6 @@
 {
   "name": "route-Map",
-  "description": "A Power BI custom visual for displaying routes between locations using SVG",
+  "description": "A Power BI custom visual for displaying routes between locations",
   "version": "1.0.0",
   "scripts": {
     "pbiviz": "pbiviz",

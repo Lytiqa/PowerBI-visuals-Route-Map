@@ -56,6 +56,7 @@ export class Visual implements IVisual {
     private foregroundSelectedColor: string = "#000";
     private hyperlinkColor: string = "#000";
     private contextMenuShown: boolean = false;
+    private colorCache: Map<string, string> = new Map();
 
     constructor(options: VisualConstructorOptions) {
         this.target = options.element;
@@ -214,17 +215,24 @@ export class Visual implements IVisual {
                 `--legend-font-size: ${legendFontSize}px;`
             );
 
-            const selectionIds = legendValues.map((value, index) =>
-                this.host.createSelectionIdBuilder()
-                    .withCategory(legendColumn as powerbi.DataViewCategoryColumn, index)
-                    .createSelectionId()
-            );
+            const selectionIds = legendValues.map((value, index) => {
+                if (legendColumn) {
+                    return this.host.createSelectionIdBuilder()
+                        .withCategory(legendColumn as powerbi.DataViewCategoryColumn, index)
+                        .createSelectionId();
+                } else {
+                    // If no legend column, create selection ID based on the row index
+                    return this.host.createSelectionIdBuilder()
+                        .withTable(this.dataView.table, index)
+                        .createSelectionId();
+                }
+            });
             
             data.forEach((route, i) => {
                 route.selectionId = selectionIds[i];
             });
 
-            const shouldShowLegend = showLegend && !!legendColumn;
+            const shouldShowLegend = showLegend && !!legendColumn && legendValues.length > 0;
             this.updateLegend(data, options.viewport, shouldShowLegend, legendPositionKey, defaultColor);
             this.drawRoutes(data, options.viewport, tooltipFields, categorical);
 
@@ -251,7 +259,6 @@ export class Visual implements IVisual {
     
         const legendColumn = this.getColumnByRole(this.dataView.categorical, "legend");
         const legendDisplayName = legendColumn?.source?.displayName ?? "Legend";
-        const categories = this.dataView?.categorical?.categories;
     
         const customTitle = this.formattingSettings.legendSettings.titleText.value;
         const showTitle = this.formattingSettings.legendSettings.showTitle.value;
@@ -260,27 +267,40 @@ export class Visual implements IVisual {
             ? (customTitle?.trim() || legendDisplayName)
             : "";
     
-        const uniqueValues = [...new Set(data.map(route => route.legendValue))].sort();
+        // Only create legend data if there's actually a legend column with values
+        const uniqueValues = legendColumn 
+            ? [...new Set(data.map(route => route.legendValue))].sort()
+            : [];
     
         const legendData: legendInterfaces.LegendData = {
             title: legendTitle,
-            dataPoints: uniqueValues.map((value, index) => {
+            dataPoints: uniqueValues.map((value) => {
                 let color = this.isHighContrast ? this.foregroundColor : this.getColorForValue(value) ?? defaultColor;
+                
+                // Find the original index of this value in the legend column
+                const legendColumn = this.getColumnByRole(this.dataView.categorical, "legend");
+                const originalIndex = legendColumn && "values" in legendColumn 
+                    ? legendColumn.values.findIndex(v => (v?.toString() || "") === value)
+                    : -1;
                 
                 if (this.isHighContrast && this.selectedIds.some(id => 
                     (id as any).getKey?.() === (this.host.createSelectionIdBuilder()
-                        .withCategory(this.dataView.categorical.categories[0], index)
+                        .withCategory(legendColumn as powerbi.DataViewCategoryColumn, originalIndex)
                         .createSelectionId() as any).getKey?.()
                 )) {
                     color = this.foregroundSelectedColor;
                 }
                 
-                const selectionId: ISelectionId = this.host.createSelectionIdBuilder()
-                    .withCategory(this.dataView.categorical.categories[0], index)
-                    .createSelectionId();
+                const selectionId: ISelectionId = legendColumn && originalIndex >= 0
+                    ? this.host.createSelectionIdBuilder()
+                        .withCategory(legendColumn as powerbi.DataViewCategoryColumn, originalIndex)
+                        .createSelectionId()
+                    : this.host.createSelectionIdBuilder()
+                        .withTable(this.dataView.table, originalIndex)
+                        .createSelectionId();
     
                 return {
-                    label: value,
+                    label: value || "(Blank)",
                     color,
                     identity: selectionId,
                     selected: false
@@ -387,15 +407,28 @@ export class Visual implements IVisual {
             return this.foregroundColor;
         }
         
-        const categories = this.dataView?.categorical?.categories?.[0];
-        if (!categories) return this.colorPalette.getColor(value).value;
+        // Only use legend-based coloring if a legend column is specifically assigned
+        const legendColumn = this.getColumnByRole(this.dataView.categorical, "legend");
+        if (!legendColumn) {
+            // No legend column assigned, use default color from data point settings if set, otherwise route settings
+            const defaultColor = this.formattingSettings.dataPointCardSettings.defaultColor.value.value;
+            return defaultColor || this.formattingSettings.routeSettingsCard.lineColor.value.value;
+        }
 
-        const index = categories.values.findIndex(v => v?.toString() === value);
-        const object = categories.objects?.[index];
+        const index = ("values" in legendColumn) ? legendColumn.values.findIndex(v => v?.toString() === value) : -1;
+        const object = ("objects" in legendColumn) ? legendColumn.objects?.[index] : undefined;
         const colorObj = object?.dataPoint?.fill as powerbi.Fill;
         const userColor = colorObj?.solid?.color;
 
-        return userColor || this.colorPalette.getColor(value).value;
+        if (userColor) {
+            return userColor;
+        }
+
+        // Use color cache to ensure consistent colors across filtering
+        if (!this.colorCache.has(value)) {
+            this.colorCache.set(value, this.colorPalette.getColor(value).value);
+        }
+        return this.colorCache.get(value);
     }
 
     private drawRoutes(
@@ -464,7 +497,11 @@ export class Visual implements IVisual {
             const width = hasValidWidths
                 ? minWidth + Math.pow(norm, 0.5) * (maxWidth - minWidth)
                 : lineWidthSetting;
-            const routeColor = this.getColorForValue(route.legendValue);
+            const legendCol = this.getColumnByRole(this.dataView.categorical, "legend");
+            const routeColor = legendCol 
+                ? this.getColorForValue(route.legendValue)
+                : (this.formattingSettings.dataPointCardSettings.defaultColor.value.value || 
+                   this.formattingSettings.routeSettingsCard.lineColor.value.value);
             const useStraightLines = this.formattingSettings.routeSettingsCard.useStraightLines.value;
             const pathCoordinates: [number, number][] = useStraightLines 
                 ? [[route.originLat, route.originLng], [route.destLat, route.destLng]]
@@ -473,9 +510,19 @@ export class Visual implements IVisual {
                     [route.destLat, route.destLng]
                 );
     
-            const selectionId = (this.host.createSelectionIdBuilder()
-                .withCategory(this.dataView.categorical.categories[0], index)
-                .createSelectionId()) as ISelectionId;
+            const legendCol2 = this.getColumnByRole(this.dataView.categorical, "legend");
+            // Find the original index of this route's legend value in the legend column
+            const originalLegendIndex = legendCol2 && "values" in legendCol2
+                ? legendCol2.values.findIndex(v => (v?.toString() || "") === route.legendValue)
+                : -1;
+            
+            const selectionId = legendCol2 && originalLegendIndex >= 0
+                ? this.host.createSelectionIdBuilder()
+                    .withCategory(legendCol2 as powerbi.DataViewCategoryColumn, originalLegendIndex)
+                    .createSelectionId()
+                : this.host.createSelectionIdBuilder()
+                    .withTable(this.dataView.table, index)
+                    .createSelectionId();
             const isHighlighted = !hasHighlights || (highlightedColumn?.highlights?.[index] != null);
 
 
@@ -770,28 +817,47 @@ export class Visual implements IVisual {
     public enumerateObjectInstances(options: EnumerateVisualObjectInstancesOptions): VisualObjectInstance[] {
         const instances: VisualObjectInstance[] = [];
 
-        if (options.objectName === 'dataPoint' && this.dataView?.categorical?.categories) {
-            const categories = this.dataView.categorical.categories[0];
-            const uniqueValues = [...new Set(categories.values.map(v => v?.toString() || ""))];
+        if (options.objectName === 'dataPoint') {
+            const legendColumn = this.getColumnByRole(this.dataView?.categorical, "legend");
+            
+            if (legendColumn && "values" in legendColumn) {
+                // Show individual color options for each legend value
+                const uniqueValues = [...new Set(legendColumn.values.map(v => v?.toString() || ""))];
 
-            uniqueValues.forEach(value => {
-                const valueIndex = categories.values.findIndex(v => v?.toString() === value);
-                if (valueIndex === -1) return;
+                uniqueValues.forEach(value => {
+                    const valueIndex = legendColumn.values.findIndex(v => v?.toString() === value);
+                    if (valueIndex === -1) return;
 
-                const color = this.getColorForValue(value);
-                const selectionId = this.host.createSelectionIdBuilder()
-                    .withCategory(categories, valueIndex)
-                    .createSelectionId();
+                    const color = this.getColorForValue(value);
+                    const selectionId = this.host.createSelectionIdBuilder()
+                        .withCategory(legendColumn as powerbi.DataViewCategoryColumn, valueIndex)
+                        .createSelectionId();
 
+                    // Use "(Blank)" for empty values to provide a meaningful display name
+                    const displayName = value || "(Blank)";
+
+                    instances.push({
+                        displayName: displayName,
+                        objectName: 'dataPoint',
+                        selector: selectionId.getSelector(),
+                        properties: {
+                            fill: { solid: { color } }
+                        }
+                    });
+                });
+            } else {
+                // Show default color option when no legend column is assigned
+                const currentDefaultColor = this.formattingSettings.dataPointCardSettings.defaultColor.value.value || 
+                                          this.formattingSettings.routeSettingsCard.lineColor.value.value;
                 instances.push({
-                    displayName: value,
+                    displayName: "Default color",
                     objectName: 'dataPoint',
-                    selector: selectionId.getSelector(),
+                    selector: null,
                     properties: {
-                        fill: { solid: { color } }
+                        defaultColor: { solid: { color: currentDefaultColor } }
                     }
                 });
-            });
+            }
         }
 
         if (options.objectName === 'routeSettings') {
